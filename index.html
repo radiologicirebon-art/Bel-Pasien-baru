@@ -1,108 +1,191 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🔔 Bel Pasien Baru</title>
-
-  <!-- Firebase v8 -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bel Pasien - Notifikasi Suara Otomatis</title>
   <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-      background: linear-gradient(135deg, #1d899b, #0d3b66);
-      color: #fff;
-      text-align: center;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      margin: 0;
-    }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 1rem;
-    }
-    button {
-      background: #fff;
-      color: #1d899b;
-      border: none;
-      border-radius: 10px;
-      padding: 15px 30px;
-      font-size: 1.2rem;
-      cursor: pointer;
-      transition: all 0.3s;
-      font-weight: bold;
-    }
-    button:hover {
-      background: #e0f7fa;
-      transform: scale(1.05);
-    }
-    .info {
-      margin-top: 20px;
-      font-size: 0.9rem;
-      opacity: 0.9;
-    }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; }
+    .controls { margin-top: 10px; }
+    button { padding: 10px 14px; border-radius: 8px; border: none; background: #1d899b; color: white; cursor: pointer; }
+    button.secondary { background: #ddd; color:#222; margin-left:10px;}
+    .status { margin-top:12px; color:#333;}
   </style>
 </head>
 <body>
+  <h2>Bel Pasien — Notifikasi Suara Otomatis</h2>
+  <p>Tekan <strong>Enable sound</strong> sekali per tab agar suara dapat diputar otomatis saat data masuk (karena pembatasan autoplay browser).</p>
 
-  <h1>🔔 Bel Pasien Baru</h1>
-  <button id="btnPanggil">Panggil Pasien Baru</button>
-  <p class="info">Klik sekali layar ini agar izin suara aktif 🔊</p>
+  <div class="controls">
+    <button id="enableBtn">Enable sound</button>
+    <button id="testBtn" class="secondary">Tes suara (local)</button>
+    <button id="triggerDbBtn" class="secondary">Trigger di DB (untuk testing)</button>
+  </div>
 
-  <!-- Suara bel -->
-  <audio id="bellSound" preload="auto">
-    <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_7c3b9c70b5.mp3?filename=notification-125125.mp3" type="audio/mpeg">
-  </audio>
+  <div class="status" id="status">Status: menunggu koneksi...</div>
+
+  <!-- Firebase v8 (sesuaikan versi bila perlu) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <script>
-    // ✅ Konfigurasi Firebase
-    const firebaseConfig = {
-      databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    // === GANTI DENGAN FIREBASE CONFIG MILIKMU ===
+    // Contoh (isikan apiKey, authDomain, projectId, databaseURL, dsb)
+    var firebaseConfig = {
+      apiKey: "GANTI_API_KEY",
+      authDomain: "GANTI_PROJECT.firebaseapp.com",
+      databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "GANTI_PROJECT",
+      // ...lainnya jika tersedia
     };
+    // ============================================
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    var db = firebase.database();
 
-    const btn = document.getElementById("btnPanggil");
-    const bell = document.getElementById("bellSound");
-    let audioEnabled = false;
+    const statusEl = document.getElementById('status');
+    const enableBtn = document.getElementById('enableBtn');
+    const testBtn = document.getElementById('testBtn');
+    const triggerDbBtn = document.getElementById('triggerDbBtn');
 
-    // 🟢 Klik pertama untuk aktifkan izin suara
-    document.body.addEventListener("click", async () => {
+    // Audio setup (Web Audio API)
+    let audioCtx = null;
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Resume jika suspended (browser requires user interaction)
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // Fungsi main: memainkan "melodi bel" singkat
+    function playBell() {
       try {
-        await bell.play();
-        bell.pause();
-        bell.currentTime = 0;
-        audioEnabled = true;
-        alert("✅ Suara berhasil diaktifkan! Sekarang bel bisa berbunyi.");
+        ensureAudioContext();
+        const now = audioCtx.currentTime;
+
+        // Buat beberapa oscillator untuk bunyi lebih kaya
+        const freqs = [880, 1320, 1760]; // frekuensi harmonic
+        const nodes = freqs.map(f => {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = f;
+          const gain = audioCtx.createGain();
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.12, now + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 1.25);
+          return {osc, gain};
+        });
+
+        // sedikit 'ding' tambahan (lower)
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.value = 440;
+        const g2 = audioCtx.createGain();
+        g2.gain.setValueAtTime(0, now);
+        g2.gain.linearRampToValueAtTime(0.08, now + 0.01);
+        g2.gain.exponentialRampToValueAtTime(0.0001, now + 1.3);
+        osc2.connect(g2).connect(audioCtx.destination);
+        osc2.start(now);
+        osc2.stop(now + 1.3);
+
+      } catch (err) {
+        console.error('Audio error:', err);
+      }
+    }
+
+    // Fallback sederhana: gunakan <audio> dengan dataURI (jika WebAudio gagal)
+    function playFallback() {
+      const a = new Audio();
+      // very short beep (data URI of small WAV). Jika ingin, ganti dengan file hosted.
+      a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+      a.play().catch(e=>console.warn('fallback audio blocked', e));
+    }
+
+    // Gabungkan: main + fallback
+    function playNotificationSound() {
+      try {
+        playBell();
+      } catch(e) {
+        playFallback();
+      }
+    }
+
+    // Tombol enable untuk mengijinkan audio (harus ada interaksi user)
+    enableBtn.addEventListener('click', () => {
+      try {
+        ensureAudioContext();
+        statusEl.textContent = 'Status: audio diaktifkan. Menunggu event dari Firebase...';
+        enableBtn.disabled = true;
       } catch (e) {
-        console.warn("⚠️ Audio belum diizinkan:", e);
-      }
-    }, { once: true });
-
-    // 🚨 Tombol ditekan -> kirim sinyal ke Firebase
-    btn.addEventListener("click", () => {
-      db.ref("bel").set({
-        status: "ON",
-        waktu: Date.now()
-      });
-      setTimeout(() => db.ref("bel/status").set("OFF"), 2000); // reset otomatis setelah 2 detik
-    });
-
-    // 👂 Pantau Firebase -> mainkan suara jika status ON
-    db.ref("bel").on("value", (snap) => {
-      const data = snap.val();
-      if (data && data.status === "ON" && audioEnabled) {
-        bell.currentTime = 0;
-        bell.play()
-          .then(() => console.log("🔔 Bel berbunyi!"))
-          .catch((e) => console.error("Gagal mainkan suara:", e));
+        console.error(e);
+        statusEl.textContent = 'Status: gagal mengaktifkan audio. Periksa konsol.';
       }
     });
+
+    // Tombol untuk tes lokal
+    testBtn.addEventListener('click', () => {
+      ensureAudioContext();
+      playNotificationSound();
+    });
+
+    // Tombol untuk memicu DB event (untuk testing)
+    triggerDbBtn.addEventListener('click', () => {
+      // Kita tulis node /bell/latestTimestamp dengan timestamp sekarang
+      db.ref('bell/latestTimestamp').set(firebase.database.ServerValue.TIMESTAMP)
+        .then(() => { console.log('DB trigger set'); })
+        .catch(err => console.error(err));
+    });
+
+    // === Listener realtime dari Firebase ===
+    // Strategi: dengarkan node 'bell/latestTimestamp' dan setiap kali berubah,
+    // jalankan suara. Node ini berisi timestamp terakhir kali bel dipicu.
+    const bellRef = db.ref('bell/latestTimestamp');
+
+    bellRef.on('value', snapshot => {
+      const v = snapshot.val();
+      if (v) {
+        // Putar suara
+        console.log('Bell triggered at', new Date(v));
+        // Jika audio belum diaktifkan, browser mungkin blok — tetap coba
+        try { ensureAudioContext(); } catch (e){}
+        playNotificationSound();
+        // Update status UI singkat
+        statusEl.textContent = 'Status: bel berbunyi — ' + new Date(v).toLocaleString();
+      } else {
+        statusEl.textContent = 'Status: terhubung, menunggu event bel...';
+      }
+    }, err => {
+      console.error('Firebase listener error:', err);
+      statusEl.textContent = 'Status: gagal mendengarkan DB — cek koneksi/config.';
+    });
+
+    // Optional: tambahkan notifikasi visual juga (desktop Notification API)
+    function showDesktopNotification(title, body) {
+      if (!("Notification" in window)) return;
+      if (Notification.permission === "granted") {
+        new Notification(title, { body });
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted") new Notification(title, { body });
+        });
+      }
+    }
+
+    // contoh: bila bellRef berubah, tampilkan juga notifikasi visual
+    bellRef.on('value', snapshot => {
+      const v = snapshot.val();
+      if (v) {
+        showDesktopNotification('Bel Pasien', 'Ada pasien baru — ' + new Date(v).toLocaleTimeString());
+      }
+    });
+
+    // Info tambahan: jika kamu ingin user lain memicu bel,
+    // cukup tulis timestamp ke path bell/latestTimestamp dari halaman operator lain.
   </script>
 </body>
 </html>
