@@ -52,10 +52,12 @@
 
   <h1>🔔 Bel Pasien Baru</h1>
   <button id="btnPanggil">Panggil Pasien Baru</button>
-  <p class="info">Semua yang buka halaman ini akan mendengar bel secara real-time</p>
+  <p class="info">Klik sekali layar ini agar izin suara aktif 🔊</p>
 
   <!-- Suara bel -->
-  <audio id="bellSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_7c3b9c70b5.mp3?filename=notification-125125.mp3" preload="auto"></audio>
+  <audio id="bellSound" preload="auto">
+    <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_7c3b9c70b5.mp3?filename=notification-125125.mp3" type="audio/mpeg">
+  </audio>
 
   <script>
     // ✅ Konfigurasi Firebase
@@ -68,10 +70,19 @@
     const btn = document.getElementById("btnPanggil");
     const bell = document.getElementById("bellSound");
 
-    // 🔊 Aktifkan audio saat pertama klik (biar tidak diblokir browser)
-    document.body.addEventListener("click", () => {
-      bell.play().catch(() => {});
-      bell.pause();
+    let audioEnabled = false;
+
+    // 🟢 Klik pertama -> aktifkan izin audio
+    document.body.addEventListener("click", async () => {
+      try {
+        await bell.play();
+        bell.pause();
+        bell.currentTime = 0;
+        audioEnabled = true;
+        console.log("🔊 Audio diaktifkan");
+      } catch (e) {
+        console.warn("⚠️ Audio belum diizinkan");
+      }
     }, { once: true });
 
     // 🚨 Tombol ditekan -> kirim sinyal ke Firebase
@@ -85,9 +96,13 @@
     // 👂 Pantau Firebase -> mainkan suara jika status berubah
     db.ref("bel").on("value", (snap) => {
       const data = snap.val();
-      if (data && data.status === "ON") {
+      if (data && data.status === "ON" && audioEnabled) {
         bell.currentTime = 0;
-        bell.play();
+        bell.play().then(() => {
+          console.log("🔔 Bel berbunyi!");
+        }).catch((e) => {
+          console.error("Gagal mainkan suara:", e);
+        });
       }
     });
   </script>
