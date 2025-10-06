@@ -69,19 +69,18 @@
 
     const btn = document.getElementById("btnPanggil");
     const bell = document.getElementById("bellSound");
-
     let audioEnabled = false;
 
-    // 🟢 Klik pertama -> aktifkan izin audio
+    // 🟢 Klik pertama untuk aktifkan izin suara
     document.body.addEventListener("click", async () => {
       try {
         await bell.play();
         bell.pause();
         bell.currentTime = 0;
         audioEnabled = true;
-        console.log("🔊 Audio diaktifkan");
+        alert("✅ Suara berhasil diaktifkan! Sekarang bel bisa berbunyi.");
       } catch (e) {
-        console.warn("⚠️ Audio belum diizinkan");
+        console.warn("⚠️ Audio belum diizinkan:", e);
       }
     }, { once: true });
 
@@ -91,18 +90,17 @@
         status: "ON",
         waktu: Date.now()
       });
+      setTimeout(() => db.ref("bel/status").set("OFF"), 2000); // reset otomatis setelah 2 detik
     });
 
-    // 👂 Pantau Firebase -> mainkan suara jika status berubah
+    // 👂 Pantau Firebase -> mainkan suara jika status ON
     db.ref("bel").on("value", (snap) => {
       const data = snap.val();
       if (data && data.status === "ON" && audioEnabled) {
         bell.currentTime = 0;
-        bell.play().then(() => {
-          console.log("🔔 Bel berbunyi!");
-        }).catch((e) => {
-          console.error("Gagal mainkan suara:", e);
-        });
+        bell.play()
+          .then(() => console.log("🔔 Bel berbunyi!"))
+          .catch((e) => console.error("Gagal mainkan suara:", e));
       }
     });
   </script>
