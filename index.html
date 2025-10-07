@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bel Notifikasi Pasien</title>
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
   <style>
     body {
       display: flex;
@@ -27,9 +30,7 @@
       transition: background 0.3s;
       margin: 10px;
     }
-    button:hover {
-      background-color: #0056b3;
-    }
+    button:hover { background-color: #0056b3; }
     p {
       margin-top: 20px;
       font-size: 18px;
@@ -42,6 +43,7 @@
   <button id="belBtn" disabled>🔔 BEL NOTIFIKASI</button>
   <p id="status">Klik "Aktifkan Suara" dulu agar notifikasi bisa berbunyi.</p>
 
+  <!-- Suara notifikasi -->
   <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
 
   <script>
@@ -87,13 +89,14 @@
     // --- Tombol BEL ditekan ---
     belBtn.addEventListener("click", () => {
       const ts = Date.now();
-      db.ref("bel/latest").set({ timestamp: ts }); // ubah data di node tetap
+      // push data baru ke list 'bel_logs' agar event child_added selalu terpanggil di semua klien
+      db.ref("bel_logs").push({ timestamp: ts });
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
-      playBel(); // bunyi juga di perangkat pemicu
+      playBel(); // bunyi di perangkat pemicu juga
     });
 
-    // --- Dengarkan perubahan dari Firebase (realtime sync) ---
-    db.ref("bel/latest").on("value", snapshot => {
+    // --- Dengarkan perubahan realtime dari Firebase (child_added) ---
+    db.ref("bel_logs").limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       if (data && data.timestamp && data.timestamp !== lastTimestamp) {
         lastTimestamp = data.timestamp;
