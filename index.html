@@ -25,6 +25,7 @@
       background-color: #007bff;
       color: white;
       transition: background 0.3s;
+      margin: 10px;
     }
     button:hover {
       background-color: #0056b3;
@@ -37,8 +38,9 @@
   </style>
 </head>
 <body>
-  <button id="belBtn">🔔 BEL NOTIFIKASI</button>
-  <p id="status">Menunggu notifikasi...</p>
+  <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
+  <button id="belBtn" disabled>🔔 BEL NOTIFIKASI</button>
+  <p id="status">Klik "Aktifkan Suara" dulu agar notifikasi bisa berbunyi.</p>
 
   <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
 
@@ -51,42 +53,52 @@
     const db = firebase.database();
 
     // --- Elemen DOM ---
+    const enableBtn = document.getElementById("enableSoundBtn");
     const belBtn = document.getElementById("belBtn");
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
 
+    let audioReady = false;
+
     // --- Fungsi untuk memutar suara ---
     function playBel() {
+      if (!audioReady) return;
       belSound.currentTime = 0;
       belSound.play()
-        .then(() => console.log("Bel diputar"))
+        .then(() => console.log("🔊 Bel diputar"))
         .catch(err => console.warn("Gagal memutar suara:", err));
     }
+
+    // --- Aktifkan izin audio ---
+    enableBtn.addEventListener("click", () => {
+      belSound.play().then(() => {
+        belSound.pause();
+        belSound.currentTime = 0;
+        audioReady = true;
+        enableBtn.disabled = true;
+        belBtn.disabled = false;
+        statusText.textContent = "✅ Suara aktif. Sekarang bisa menerima notifikasi.";
+      }).catch(err => {
+        console.warn("Tidak bisa aktifkan suara:", err);
+      });
+    });
 
     // --- Tombol BEL ditekan ---
     belBtn.addEventListener("click", () => {
       const ts = Date.now();
-      db.ref("bel").set({ timestamp: ts });
-      statusText.textContent = "🔔 Bel ditekan, notifikasi dikirim!";
+      db.ref("bel").push({ timestamp: ts });
+      statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
+      playBel(); // Bunyi juga di perangkat pemicu
     });
 
     // --- Dengarkan perubahan dari Firebase ---
-    db.ref("bel").on("value", snapshot => {
+    db.ref("bel").limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       if (data && data.timestamp) {
         playBel();
         statusText.textContent = "📢 Ada pasien baru!";
       }
     });
-
-    // --- Aktifkan izin audio saat diklik pertama kali ---
-    window.addEventListener("click", () => {
-      belSound.play().then(() => {
-        belSound.pause();
-        belSound.currentTime = 0;
-        console.log("Audio permission aktif");
-      }).catch(() => {});
-    }, { once: true });
   </script>
 </body>
 </html>
