@@ -1,114 +1,192 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>🔔 Bel Pasien Baru</title>
-
-  <!-- Firebase v8 -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bel Pasien - Ring Notifikasi</title>
   <style>
-    body {
-      font-family: "Poppins", sans-serif;
-      text-align: center;
-      background: #f5f5f5;
-      padding: 40px;
-    }
-    h2 { color: #1d899b; }
-    button {
-      background: #1d899b;
-      color: white;
-      border: none;
-      padding: 15px 25px;
-      border-radius: 12px;
-      font-size: 18px;
-      cursor: pointer;
-      margin-top: 20px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-    button:active {
-      transform: scale(0.96);
-    }
-    #enable {
-      background: #777;
-      font-size: 14px;
-      margin-top: 15px;
-    }
-    p { color:#555; }
+    body{font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f6f9fc}
+    .card{background:#fff;padding:28px;border-radius:12px;box-shadow:0 6px 24px rgba(12,40,80,.08);width:min(720px,92%);text-align:center}
+    h1{margin:0 0 8px;font-size:20px}
+    p{margin:0 0 20px;color:#334}
+    button{appearance:none;border:0;padding:14px 22px;border-radius:10px;font-size:16px;cursor:pointer}
+    .ring{background:#ff6b6b;color:#fff}
+    .stop{background:#ddd;color:#222}
+    footer{margin-top:16px;color:#667}
+    small{color:#889}
   </style>
 </head>
 <body>
+  <div class="card">
+    <h1>Bel Pasien</h1>
+    <p>Tekan tombol untuk memberi notifikasi. Semua perangkat lain yang membuka halaman ini akan mendengar bel dan suara: "Ada pasien baru"</p>
 
-  <h2>🔔 Bel Pasien Baru</h2>
-  <p>Tekan tombol di bawah untuk memanggil pasien.<br>Semua perangkat yang membuka halaman ini akan berbunyi otomatis.</p>
-  <button id="callBtn">🔔 Panggil Pasien Baru</button>
-  <br>
-  <button id="enable">Aktifkan Suara</button>
-  <p id="status">Menunggu koneksi Firebase...</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button id="ringBtn" class="ring">🔔 BEL</button>
+      <button id="testBtn" class="stop">▶️ Tes Suara</button>
+      <button id="muteBtn" class="stop">🔇 Mute</button>
+    </div>
 
+    <footer>
+      <small>Terhubung ke Firebase Realtime Database: <code id="dbUrl"></code></small>
+    </footer>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script>
-    // ====== KONFIGURASI FIREBASE ======
-    const firebaseConfig = {
-      databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
+    // === KONFIGURASI FIREBASE =====================
+    // Ganti dengan konfigurasi proyek Anda jika perlu. Jika Anda hanya ingin memakai URL RTDB yang diberikan,
+    // kita akan menulis langsung ke endpoint menggunakan database compat SDK.
+
+    const RTDB_URL = 'https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/';
+    document.getElementById('dbUrl').textContent = RTDB_URL;
+
+    // NOTE: Untuk menulis ke database gratis dari web, rules RTDB harus mengizinkan write/unauthenticated
+    // (atau Anda perlu menambahkan konfigurasi auth). Pastikan security rules sesuai.
+
+    // Initialize a minimal firebase app that points to the RTDB URL.
+    // We'll create a fake config that only sets databaseURL.
+    const firebaseConfig = { databaseURL: RTDB_URL };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    // ===================================
 
-    const statusEl = document.getElementById("status");
-    const callBtn = document.getElementById("callBtn");
-    const enableBtn = document.getElementById("enable");
+    // Path node untuk event bel
+    const BELL_NODE = '/bell/latest';
 
-    // Audio setup
-    let audioCtx;
-    function initAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        statusEl.textContent = "✅ Suara aktif. Menunggu bel...";
-      }
-      if (audioCtx.state === "suspended") audioCtx.resume();
-    }
+    // local state
+    let lastEventTs = 0;
+    let muted = false;
 
-    enableBtn.addEventListener("click", () => {
-      initAudio();
-      enableBtn.disabled = true;
-    });
-
-    function playBell() {
+    // Play "ting tong" using WebAudio (no external file)
+    function playTingTong() {
       try {
-        initAudio();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-        osc.connect(gain).connect(audioCtx.destination);
-        osc.start(now);
-        osc.stop(now + 1.2);
-      } catch {
-        new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play();
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = ctx.currentTime;
+        // first ding
+        const o1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        o1.type = 'sine';
+        o1.frequency.setValueAtTime(880, now); // A5
+        g1.gain.setValueAtTime(0.0001, now);
+        g1.gain.exponentialRampToValueAtTime(0.3, now + 0.01);
+        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        o1.connect(g1); g1.connect(ctx.destination);
+        o1.start(now); o1.stop(now + 0.5);
+        // second tong (lower)
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(660, now + 0.35); // E5
+        g2.gain.setValueAtTime(0.0001, now + 0.35);
+        g2.gain.exponentialRampToValueAtTime(0.25, now + 0.36);
+        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+        o2.connect(g2); g2.connect(ctx.destination);
+        o2.start(now + 0.35); o2.stop(now + 0.9);
+      } catch (e) {
+        console.warn('WebAudio error', e);
       }
     }
 
-    // Tombol pemicu bel
-    callBtn.addEventListener("click", () => {
-      db.ref("bell/latest").set(Date.now());
-      statusEl.textContent = "🔔 Bel dikirim ke semua perangkat!";
+    // Text-to-Speech: usahakan pilih voice laki-laki dewasa bila tersedia
+    function speakPhrase(text) {
+      if (muted) return;
+      if (!('speechSynthesis' in window)) return;
+
+      const synth = window.speechSynthesis;
+      const utter = new SpeechSynthesisUtterance(text);
+      const tryPickMale = (voices) => {
+        // Heuristik pemilihan suara laki-laki
+        // Prioritaskan kata-kata yang mengindikasikan penyedia besar lalu nama yang mengandung 'Male' atau 'man'.
+        const preferred = voices.filter(v => /male|man|Google|Microsoft|Azure|Indonesian|id-/.test((v.name + ' ' + v.lang)));
+        if (preferred.length) return preferred[0];
+        if (voices.length) return voices[0];
+        return null;
+      };
+
+      const setVoiceAndSpeak = () => {
+        const voices = synth.getVoices();
+        const v = tryPickMale(voices);
+        if (v) utter.voice = v;
+        utter.lang = 'id-ID';
+        utter.rate = 1;
+        utter.pitch = 1;
+        synth.cancel(); // stop existing
+        synth.speak(utter);
+      };
+
+      // Some browsers load voices asynchronously
+      if (speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.addEventListener('voiceschanged', setVoiceAndSpeak);
+      } else {
+        setVoiceAndSpeak();
+      }
+    }
+
+    // Fungsi untuk mem-trigger event di RTDB
+    async function triggerBell() {
+      const ts = Date.now();
+      const payload = {
+        ts,
+        by: (navigator.userAgent || 'unknown'),
+        message: 'Ada Pasien Baru'
+      };
+      try {
+        await db.ref(BELL_NODE).set(payload);
+      } catch (e) {
+        console.error('gagal menulis ke RTDB', e);
+        alert('Gagal mengirim notifikasi. Periksa rules database dan koneksi.');
+      }
+    }
+
+    // Listener: dengarkan perubahan di node
+    db.ref(BELL_NODE).on('value', snapshot => {
+      const val = snapshot.val();
+      if (!val) return;
+      const ts = val.ts || 0;
+      if (ts <= lastEventTs) return; // sudah pernah diproses
+      lastEventTs = ts;
+
+      // Play bell + speech
+      if (!muted) playTingTong();
+      // jeda sedikit supaya "ting tong" terdengar sebelum ucapan
+      setTimeout(() => speakPhrase(val.message || 'Ada pasien baru'), 550);
     });
 
-    // Listener Firebase
-    db.ref("bell/latest").on("value", snap => {
-      if (snap.exists()) {
-        playBell();
-        const t = new Date(snap.val()).toLocaleTimeString();
-        statusEl.textContent = "🔊 Bel diterima: " + t;
+    // Tombol UI
+    const ringBtn = document.getElementById('ringBtn');
+    const testBtn = document.getElementById('testBtn');
+    const muteBtn = document.getElementById('muteBtn');
+
+    ringBtn.addEventListener('click', async () => {
+      // Untuk mengizinkan suara autoplay di beberapa browser, harus dipicu oleh gesture click.
+      // Jadi pada click ini kita juga memanggil playTingTong/speakPhrase sementara menulis event ke db.
+      if (!muted) {
+        playTingTong();
+        setTimeout(() => speakPhrase('Ada pasien baru'), 550);
+      }
+      await triggerBell();
+      ringBtn.animate([{transform:'scale(1)'},{transform:'scale(0.95)'},{transform:'scale(1)'}],{duration:300});
+    });
+
+    testBtn.addEventListener('click', () => {
+      if (!muted) {
+        playTingTong();
+        setTimeout(() => speakPhrase('Ini hanya tes notifikasi'), 550);
       }
     });
-  </script>
 
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? '🔈 Unmute' : '🔇 Mute';
+    });
+
+    // Minta permission audio context pada beberapa browser saat load (opsional)
+    window.addEventListener('click', () => {
+      try { if (window.AudioContext) new AudioContext(); } catch(e){}
+    }, {once:true});
+
+    // Info: pastikan rules RTDB mengizinkan read untuk semua perangkat yang ingin menerima notifikasi.
+  </script>
 </body>
 </html>
