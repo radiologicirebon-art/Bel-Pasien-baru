@@ -59,6 +59,7 @@
     const belSound = document.getElementById("belSound");
 
     let audioReady = false;
+    let lastTimestamp = 0;
 
     // --- Fungsi untuk memutar suara ---
     function playBel() {
@@ -86,15 +87,16 @@
     // --- Tombol BEL ditekan ---
     belBtn.addEventListener("click", () => {
       const ts = Date.now();
-      db.ref("bel").push({ timestamp: ts });
+      db.ref("bel/latest").set({ timestamp: ts }); // ubah data di node tetap
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
-      playBel(); // Bunyi juga di perangkat pemicu
+      playBel(); // bunyi juga di perangkat pemicu
     });
 
-    // --- Dengarkan perubahan dari Firebase ---
-    db.ref("bel").limitToLast(1).on("child_added", snapshot => {
+    // --- Dengarkan perubahan dari Firebase (realtime sync) ---
+    db.ref("bel/latest").on("value", snapshot => {
       const data = snapshot.val();
-      if (data && data.timestamp) {
+      if (data && data.timestamp && data.timestamp !== lastTimestamp) {
+        lastTimestamp = data.timestamp;
         playBel();
         statusText.textContent = "📢 Ada pasien baru!";
       }
