@@ -13,9 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -26,9 +24,11 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
+      overflow: hidden;
     }
 
     .container {
+      position: relative;
       background-color: white;
       padding: 40px;
       border-radius: 16px;
@@ -92,6 +92,40 @@
       font-size: 16px;
       color: #555;
     }
+
+    /* Area untuk stiker animasi */
+    #stickerArea {
+      position: absolute;
+      top: -20%; /* muncul sedikit di atas container */
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      width: 200px;
+      height: 200px;
+      overflow: visible;
+    }
+
+    .sticker-img {
+      position: absolute;
+      width: 120px;
+      height: auto;
+      opacity: 0;
+      animation: stickerPop 0.6s ease-out forwards,
+                 stickerFade 1.4s ease-out 0.5s forwards;
+    }
+
+    @keyframes stickerPop {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes stickerFade {
+      to {
+        opacity: 0;
+        transform: translateY(-40px);
+      }
+    }
   </style>
 </head>
 <body>
@@ -101,6 +135,8 @@
     <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
     <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
     <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
+
+    <div id="stickerArea"></div>
   </div>
 
   <!-- Suara notifikasi -->
@@ -118,6 +154,7 @@
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
     const icon = document.getElementById("icon");
+    const stickerArea = document.getElementById("stickerArea");
 
     let audioReady = false;
     let lastTimestamp = 0;
@@ -129,9 +166,21 @@
         .then(() => {
           icon.classList.add("animate");
           setTimeout(() => icon.classList.remove("animate"), 700);
-          console.log("🔊 Bel diputar");
         })
         .catch(err => console.warn("Gagal memutar suara:", err));
+    }
+
+    function showStickerAnimation() {
+      // Bisa kamu ganti url animasi sesuai file GIF/SVG-mu
+      const img = document.createElement("img");
+      img.src = "animasi_hospital_patient.png"; // ganti ke path file PNG / GIF
+      img.className = "sticker-img";
+      stickerArea.appendChild(img);
+
+      // Hapus setelah animasi selesai (sekitar 2 detik)
+      setTimeout(() => {
+        img.remove();
+      }, 2000);
     }
 
     enableBtn.addEventListener("click", () => {
@@ -152,6 +201,7 @@
       db.ref("bel_logs").push({ timestamp: ts });
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
       playBel();
+      showStickerAnimation();
     });
 
     db.ref("bel_logs").limitToLast(1).on("child_added", snapshot => {
@@ -159,6 +209,7 @@
       if (data && data.timestamp && data.timestamp !== lastTimestamp) {
         lastTimestamp = data.timestamp;
         playBel();
+        showStickerAnimation();
         statusText.textContent = "📢 Ada pasien baru!";
       }
     });
