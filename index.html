@@ -9,70 +9,131 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to right, #f2f6fc, #e3efff);
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      background-color: #eef3f7;
-      font-family: sans-serif;
     }
-    button {
-      padding: 20px 40px;
+
+    .container {
+      background-color: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      color: #2c3e50;
       font-size: 24px;
+    }
+
+    .icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #007bff;
+      transition: transform 0.3s ease;
+    }
+
+    .icon.animate {
+      animation: ring 0.6s ease;
+    }
+
+    @keyframes ring {
+      0% { transform: rotate(0); }
+      20% { transform: rotate(15deg); }
+      40% { transform: rotate(-10deg); }
+      60% { transform: rotate(5deg); }
+      80% { transform: rotate(-3deg); }
+      100% { transform: rotate(0); }
+    }
+
+    button {
+      padding: 16px 32px;
+      font-size: 18px;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       cursor: pointer;
       background-color: #007bff;
       color: white;
-      transition: background 0.3s;
-      margin: 10px;
+      transition: background 0.3s, transform 0.2s;
+      margin: 10px 0;
+      width: 100%;
     }
-    button:hover { background-color: #0056b3; }
-    p {
+
+    button:hover {
+      background-color: #0056b3;
+      transform: translateY(-2px);
+    }
+
+    button:disabled {
+      background-color: #a0c4ff;
+      cursor: not-allowed;
+    }
+
+    p#status {
       margin-top: 20px;
-      font-size: 18px;
-      color: #444;
+      font-size: 16px;
+      color: #555;
     }
   </style>
 </head>
 <body>
-  <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
-  <button id="belBtn" disabled>🔔 BEL NOTIFIKASI</button>
-  <p id="status">Klik "Aktifkan Suara" dulu agar notifikasi bisa berbunyi.</p>
+  <div class="container">
+    <div class="icon" id="icon">🔔</div>
+    <h1>Notifikasi Pasien Baru</h1>
+    <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
+    <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
+    <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
+  </div>
 
   <!-- Suara notifikasi -->
   <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
 
   <script>
-    // --- Konfigurasi Firebase ---
     const firebaseConfig = {
       databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- Elemen DOM ---
     const enableBtn = document.getElementById("enableSoundBtn");
     const belBtn = document.getElementById("belBtn");
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
+    const icon = document.getElementById("icon");
 
     let audioReady = false;
     let lastTimestamp = 0;
 
-    // --- Fungsi untuk memutar suara ---
     function playBel() {
       if (!audioReady) return;
       belSound.currentTime = 0;
       belSound.play()
-        .then(() => console.log("🔊 Bel diputar"))
+        .then(() => {
+          icon.classList.add("animate");
+          setTimeout(() => icon.classList.remove("animate"), 700);
+          console.log("🔊 Bel diputar");
+        })
         .catch(err => console.warn("Gagal memutar suara:", err));
     }
 
-    // --- Aktifkan izin audio ---
     enableBtn.addEventListener("click", () => {
       belSound.play().then(() => {
         belSound.pause();
@@ -80,22 +141,19 @@
         audioReady = true;
         enableBtn.disabled = true;
         belBtn.disabled = false;
-        statusText.textContent = "✅ Suara aktif. Sekarang bisa menerima notifikasi.";
+        statusText.textContent = "✅ Suara aktif. Siap menerima notifikasi.";
       }).catch(err => {
         console.warn("Tidak bisa aktifkan suara:", err);
       });
     });
 
-    // --- Tombol BEL ditekan ---
     belBtn.addEventListener("click", () => {
       const ts = Date.now();
-      // push data baru ke list 'bel_logs' agar event child_added selalu terpanggil di semua klien
       db.ref("bel_logs").push({ timestamp: ts });
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
-      playBel(); // bunyi di perangkat pemicu juga
+      playBel();
     });
 
-    // --- Dengarkan perubahan realtime dari Firebase (child_added) ---
     db.ref("bel_logs").limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       if (data && data.timestamp && data.timestamp !== lastTimestamp) {
