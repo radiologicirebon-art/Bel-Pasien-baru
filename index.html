@@ -93,37 +93,48 @@
       color: #555;
     }
 
-    /* Area untuk stiker animasi */
-    #stickerArea {
+    /* Notifikasi teks mencolok */
+    #notifTextArea {
       position: absolute;
-      top: -20%; /* muncul sedikit di atas container */
+      top: -30px;
       left: 50%;
       transform: translateX(-50%);
-      pointer-events: none;
-      width: 200px;
-      height: 200px;
-      overflow: visible;
-    }
-
-    .sticker-img {
-      position: absolute;
-      width: 120px;
-      height: auto;
+      font-size: 28px;
+      font-weight: 900;
+      color: #fff;
+      background-color: #e74c3c;
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(231, 76, 60, 0.8);
       opacity: 0;
-      animation: stickerPop 0.6s ease-out forwards,
-                 stickerFade 1.4s ease-out 0.5s forwards;
+      z-index: 1000;
+      pointer-events: none;
+      text-align: center;
     }
 
-    @keyframes stickerPop {
-      0% { transform: scale(0.3); opacity: 0; }
-      50% { transform: scale(1.2); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
+    .notif-text {
+      animation: boomIn 0.5s ease-out forwards,
+                 boomOut 0.8s ease-in 2.3s forwards;
     }
 
-    @keyframes stickerFade {
+    @keyframes boomIn {
+      0% {
+        opacity: 0;
+        transform: translateX(-50%) scale(0.6) rotate(-10deg);
+      }
+      60% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1.2) rotate(5deg);
+      }
+      100% {
+        transform: translateX(-50%) scale(1) rotate(0);
+      }
+    }
+
+    @keyframes boomOut {
       to {
         opacity: 0;
-        transform: translateY(-40px);
+        transform: translateX(-50%) scale(0.8) translateY(-40px);
       }
     }
   </style>
@@ -135,8 +146,7 @@
     <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
     <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
     <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
-
-    <div id="stickerArea"></div>
+    <div id="notifTextArea"></div>
   </div>
 
   <!-- Suara notifikasi -->
@@ -154,7 +164,7 @@
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
     const icon = document.getElementById("icon");
-    const stickerArea = document.getElementById("stickerArea");
+    const notifTextArea = document.getElementById("notifTextArea");
 
     let audioReady = false;
     let lastTimestamp = 0;
@@ -170,17 +180,20 @@
         .catch(err => console.warn("Gagal memutar suara:", err));
     }
 
-    function showStickerAnimation() {
-      // Bisa kamu ganti url animasi sesuai file GIF/SVG-mu
-      const img = document.createElement("img");
-      img.src = "animasi_hospital_patient.png"; // ganti ke path file PNG / GIF
-      img.className = "sticker-img";
-      stickerArea.appendChild(img);
+    function vibrateDevice() {
+      if (navigator.vibrate) {
+        navigator.vibrate([300, 100, 300]);
+      }
+    }
 
-      // Hapus setelah animasi selesai (sekitar 2 detik)
+    function showTextNotification() {
+      notifTextArea.textContent = "💥 MBA / MAS ‼️ ADA PASIEN BARU LOH ‼️";
+      notifTextArea.classList.add("notif-text");
+
       setTimeout(() => {
-        img.remove();
-      }, 2000);
+        notifTextArea.classList.remove("notif-text");
+        notifTextArea.textContent = "";
+      }, 3500);
     }
 
     enableBtn.addEventListener("click", () => {
@@ -201,7 +214,8 @@
       db.ref("bel_logs").push({ timestamp: ts });
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
       playBel();
-      showStickerAnimation();
+      showTextNotification();
+      vibrateDevice();
     });
 
     db.ref("bel_logs").limitToLast(1).on("child_added", snapshot => {
@@ -209,7 +223,8 @@
       if (data && data.timestamp && data.timestamp !== lastTimestamp) {
         lastTimestamp = data.timestamp;
         playBel();
-        showStickerAnimation();
+        showTextNotification();
+        vibrateDevice();
         statusText.textContent = "📢 Ada pasien baru!";
       }
     });
