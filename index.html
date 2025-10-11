@@ -93,49 +93,33 @@
       color: #555;
     }
 
-    /* Notifikasi teks mencolok */
-    #notifTextArea {
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 28px;
-      font-weight: 900;
-      color: #fff;
-      background-color: #e74c3c;
-      padding: 16px 24px;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(231, 76, 60, 0.8);
+    /* Area gambar notifikasi */
+    #notifImageArea {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
       opacity: 0;
-      z-index: 1000;
-      pointer-events: none;
-      text-align: center;
+      visibility: hidden;
+      transition: opacity 0.5s ease;
+      z-index: 9999;
     }
 
-    .notif-text {
-      animation: boomIn 0.5s ease-out forwards,
-                 boomOut 0.8s ease-in 2.3s forwards;
+    #notifImageArea img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 16px;
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
     }
 
-    @keyframes boomIn {
-      0% {
-        opacity: 0;
-        transform: translateX(-50%) scale(0.6) rotate(-10deg);
-      }
-      60% {
-        opacity: 1;
-        transform: translateX(-50%) scale(1.2) rotate(5deg);
-      }
-      100% {
-        transform: translateX(-50%) scale(1) rotate(0);
-      }
-    }
-
-    @keyframes boomOut {
-      to {
-        opacity: 0;
-        transform: translateX(-50%) scale(0.8) translateY(-40px);
-      }
+    #notifImageArea.show {
+      opacity: 1;
+      visibility: visible;
     }
   </style>
 </head>
@@ -146,7 +130,11 @@
     <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
     <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
     <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
-    <div id="notifTextArea"></div>
+  </div>
+
+  <!-- Gambar notifikasi -->
+  <div id="notifImageArea">
+    <img src="ada_pasien_baru.png" alt="Ada Pasien Baru">
   </div>
 
   <!-- Suara notifikasi -->
@@ -164,7 +152,7 @@
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
     const icon = document.getElementById("icon");
-    const notifTextArea = document.getElementById("notifTextArea");
+    const notifImageArea = document.getElementById("notifImageArea");
 
     let audioReady = false;
     let lastTimestamp = 0;
@@ -175,6 +163,13 @@
       belSound.play()
         .then(() => {
           icon.classList.add("animate");
+          notifImageArea.classList.add("show");
+
+          // Hilangkan gambar setelah suara selesai
+          belSound.onended = () => {
+            notifImageArea.classList.remove("show");
+          };
+
           setTimeout(() => icon.classList.remove("animate"), 700);
         })
         .catch(err => console.warn("Gagal memutar suara:", err));
@@ -184,16 +179,6 @@
       if (navigator.vibrate) {
         navigator.vibrate([300, 100, 300]);
       }
-    }
-
-    function showTextNotification() {
-      notifTextArea.textContent = "💥 MBA / MAS ‼️ ADA PASIEN BARU LOH ‼️";
-      notifTextArea.classList.add("notif-text");
-
-      setTimeout(() => {
-        notifTextArea.classList.remove("notif-text");
-        notifTextArea.textContent = "";
-      }, 3500);
     }
 
     enableBtn.addEventListener("click", () => {
@@ -214,7 +199,6 @@
       db.ref("bel_logs").push({ timestamp: ts });
       statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
       playBel();
-      showTextNotification();
       vibrateDevice();
     });
 
@@ -223,7 +207,6 @@
       if (data && data.timestamp && data.timestamp !== lastTimestamp) {
         lastTimestamp = data.timestamp;
         playBel();
-        showTextNotification();
         vibrateDevice();
         statusText.textContent = "📢 Ada pasien baru!";
       }
