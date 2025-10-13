@@ -2,266 +2,581 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard Kepala Shift Radiologi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard & Penjadwalan Radiologi - RS Mitra Plumbon</title>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <!-- Firebase compat (pakai satu set SDK compat untuk dua app berbeda) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-  <!-- Google Fonts -->
+  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(to right, #f2f6fc, #e3efff);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      flex-direction: column;
+    :root {
+      --blue:#0b67d0;
+      --muted:#6b7280;
+      --card-bg: #ffffff;
+      --page-bg: linear-gradient(90deg,#f2f6fc,#e8f3ff);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+      background: var(--page-bg);
+      color:#111827;
+      -webkit-font-smoothing:antialiased;
     }
 
-    .section {
-      background: white;
-      padding: 24px;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-      text-align: center;
-      margin: 10px;
-      width: 90%;
-      max-width: 420px;
+    /* Page container (centered column, scrollable) */
+    .page {
+      max-width:980px;
+      margin:32px auto;
+      padding:20px;
+      display:flex;
+      flex-direction:column;
+      gap:20px;
     }
 
-    h1 {
-      color: #007bff;
-      margin-bottom: 16px;
+    .card {
+      background: var(--card-bg);
+      border-radius:14px;
+      padding:18px;
+      box-shadow:0 8px 30px rgba(13,38,76,0.07);
+      border:1px solid rgba(15, 51, 99, 0.06);
     }
 
-    button {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background: #007bff;
-      color: white;
-      font-size: 16px;
-      margin: 6px 0;
-      width: 100%;
+    h1 { color:var(--blue); margin:0 0 6px 0; }
+    h2 { margin:0 0 10px 0; color:var(--blue); font-size:18px; }
+    p.small { color:var(--muted); margin:6px 0 0 0; font-size:13px; }
+
+    /* layout */
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .col { flex:1; min-width:220px; }
+
+    /* form */
+    label { display:block; font-size:13px; margin-bottom:6px; color:#0f172a; }
+    input[type="text"], input[type="date"], input[type="time"], select, textarea {
+      width:100%;
+      padding:10px 12px;
+      border-radius:8px;
+      border:1px solid #e6e9ef;
+      font-size:14px;
+      background:#fbfdff;
     }
+    textarea[readonly] { background:#f8fafc; color:#374151; }
+    .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+    button.primary {
+      background:var(--blue);
+      color:white;
+      border:none;
+      padding:10px 14px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    button.ghost { background:transparent; border:1px solid #d1d5db; padding:10px 14px; border-radius:10px; cursor:pointer; }
+    button.warn { background:#f59e0b; color:white; border:none; padding:10px 14px; border-radius:10px; cursor:pointer; }
 
-    button:hover { background: #0056b3; }
-    button:disabled { background: #a0c4ff; cursor: not-allowed; }
+    /* schedule list grid */
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-top:12px; }
+    .card-item { background:#fbfdff; border-radius:10px; padding:12px; border:1px solid #e6eefc; position:relative; }
+    .card-item .time { font-weight:700; color:var(--blue); margin-top:8px; }
+    .card-item .muted { color:var(--muted); font-size:13px; }
+    .delete-btn { position:absolute; top:8px; right:8px; background:transparent; border:none; cursor:pointer; font-size:16px; }
 
-    p { color: #555; }
-
-    /* Popup pengingat */
+    /* popup & notif image */
     .popup {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      border: 2px solid #007bff;
-      border-radius: 16px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.2);
-      padding: 24px;
-      text-align: center;
-      z-index: 9999;
-      display: none;
-      animation: fadeIn 0.5s ease-in-out;
+      position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:9999;
+      width:320px; max-width:90%;
+      background:white; border:2px solid var(--blue); border-radius:14px; padding:18px; display:none;
+      box-shadow:0 12px 40px rgba(2,6,23,0.2);
     }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translate(-50%, -45%); }
-      to { opacity: 1; transform: translate(-50%, -50%); }
-    }
-
-    /* Gambar Notifikasi */
     #notifImageArea {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background-color: rgba(0, 0, 0, 0.8);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.5s ease;
-      z-index: 9999;
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      background: rgba(0,0,0,0.75); z-index:9998; opacity:0; visibility:hidden; transition:opacity .25s;
     }
+    #notifImageArea.show { opacity:1; visibility:visible; }
+    #notifImageArea img { max-width:90%; border-radius:12px; box-shadow:0 12px 40px rgba(255,255,255,0.06); }
 
-    #notifImageArea img {
-      max-width: 90%;
-      max-height: 90%;
-      border-radius: 16px;
-      box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
-    }
-
-    #notifImageArea.show {
-      opacity: 1;
-      visibility: visible;
+    /* small helpers */
+    .muted { color:var(--muted); }
+    .top-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    @media (max-width:680px) {
+      .actions { flex-direction:column; }
+      .top-row { flex-direction:column; align-items:flex-start; }
     }
   </style>
 </head>
-
 <body>
-  <!-- 🔹 Bagian Pengingat Otomatis -->
-  <div class="section">
-    <h1>Pengingat Kepala Shift</h1>
-    <p>Pop-up otomatis jam 10:25, 13:25, dan 17:55 WIB</p>
+  <div class="page">
+
+    <!-- Header card (Dashboard title) -->
+    <div class="card">
+      <h1>🩻 RS Mitra Plumbon - Kepala Shift & Penjadwalan</h1>
+      <p class="small">Dashboard Kepala Shift terintegrasi dengan sistem penjadwalan pemeriksaan. (Satu halaman, dua database Firebase terpisah).</p>
+    </div>
+
+    <!-- Dashboard Kepala Shift (pengingat + bel) -->
+    <div class="card" id="dashboardCard">
+      <div class="top-row">
+        <div>
+          <h2>Pengingat Kepala Shift</h2>
+          <p class="muted">Pop-up otomatis jam <strong>10:25</strong>, <strong>13:25</strong>, dan <strong>17:55</strong> WIB</p>
+        </div>
+        <div style="min-width:220px;">
+          <h2>Notifikasi Pasien Baru</h2>
+          <p class="muted">Aktifkan suara, lalu tekan "Kirim Notifikasi" untuk men-trigger bel di semua perangkat yang terhubung.</p>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:240px;">
+          <button id="enableSoundBtn" class="primary">🔈 Aktifkan Suara</button>
+        </div>
+        <div style="flex:1; min-width:240px;">
+          <button id="belBtn" class="ghost" disabled>🔔 Kirim Notifikasi</button>
+        </div>
+      </div>
+
+      <p id="status" class="muted" style="margin-top:10px;">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
+
+      <!-- popup pengingat -->
+      <div id="popup" class="popup">
+        <h3>🔔 Pengingat Kepala Shift</h3>
+        <p style="margin:8px 0;">Jangan lupa WA Dokter Spesialis sekarang.</p>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:10px;">
+          <button id="doneButton" class="ghost">Sudah dikirim ✅</button>
+        </div>
+      </div>
+
+      <!-- notif image overlay -->
+      <div id="notifImageArea"><img id="notifImg" src="ada_pasien_baru.png" alt="Ada Pasien Baru"></div>
+    </div>
+
+    <!-- Form Penjadwalan -->
+    <div class="card" id="scheduleCard">
+      <h2>📋 Input Jadwal Pemeriksaan</h2>
+
+      <form id="scheduleForm" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:10px;">
+        <div>
+          <label>Nama Pasien</label>
+          <input id="name" type="text" required placeholder="Nama pasien">
+        </div>
+        <div>
+          <label>Nomor WA</label>
+          <input id="wa" type="text" required placeholder="089812345678">
+          <p class="muted" style="margin-top:6px;">Nomor otomatis diubah ke format 62xxxx</p>
+        </div>
+        <div>
+          <label>Tanggal Pemeriksaan</label>
+          <input id="date" type="date" required>
+        </div>
+        <div>
+          <label>Jam Pemeriksaan</label>
+          <input id="time" type="time" required>
+        </div>
+        <div>
+          <label>Pilih Pemeriksaan</label>
+          <select id="procedure">
+            <option value="ct_abdomen">CT Scan Abdomen</option>
+            <option value="usg_abdomen">USG Abdomen</option>
+            <option value="usg_lower_abdomen">USG Lower Abdomen</option>
+            <option value="ct_cardiac">CT Scan Cardiac</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label>Persiapan</label>
+          <textarea id="prep" rows="5" readonly></textarea>
+        </div>
+
+        <div style="grid-column:1/-1;" class="actions">
+          <div style="flex:1;">
+            <div id="message" class="muted"></div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="saveBtn" type="submit" class="primary">💾 Simpan Jadwal</button>
+            <button id="saveSendBtn" type="button" class="primary">💾 Simpan + Kirim WA</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Jadwal Harian & Filter -->
+    <div class="card" id="listCard">
+      <div class="top-row">
+        <div>
+          <h2>📌 Jadwal Harian</h2>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label class="muted" style="margin:0 6px 0 0;">Tanggal:</label>
+          <input id="viewDate" type="date">
+          <label class="muted" style="margin:0 6px 0 0;">Filter:</label>
+          <select id="filterProcedure">
+            <option value="all">Semua</option>
+            <option value="ct_abdomen">CT Scan Abdomen</option>
+            <option value="usg_abdomen">USG Abdomen</option>
+            <option value="usg_lower_abdomen">USG Lower Abdomen</option>
+            <option value="ct_cardiac">CT Scan Cardiac</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="scheduleList" class="grid"></div>
+    </div>
+
   </div>
 
-  <!-- 🔹 Bagian Bel Notifikasi Pasien -->
-  <div class="section">
-    <h1>Notifikasi Pasien Baru</h1>
-    <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
-    <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
-    <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
-  </div>
-
-  <!-- 🔔 Popup pengingat -->
-  <div id="popup" class="popup">
-    <h2>🔔 Pengingat Kepala Shift 🔔</h2>
-    <p>Jangan lupa WA Dokter Spesialis sekarang.</p>
-    <button id="doneButton">Sudah dikirim ✅</button>
-  </div>
-
-  <!-- 🔊 Suara -->
+  <!-- Audio (pling dan bel) -->
   <audio id="plingSound" preload="auto">
     <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
   </audio>
-  <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
+  <audio id="belSound" preload="auto">
+    <!-- Pakai file lokal / URL sesuai kebutuhan -->
+    <source src="Notifikasi-pasien-baru.mp3" type="audio/mpeg">
+  </audio>
 
-  <!-- 🖼️ Gambar notifikasi pasien -->
-  <div id="notifImageArea">
-    <img src="ada_pasien_baru.png" alt="Ada Pasien Baru">
-  </div>
+<script>
+/* ============================
+   CONFIG: dua Firebase app
+   - belApp -> DB bel-pasien
+   - schedApp -> DB jadwal-pemeriksaan
+   Pastikan databaseURL sama persis seperti yang Bapak sebut.
+   ============================ */
 
-  <script>
-    /* ==============================
-       🔧 Firebase Config
-    ============================== */
-    const firebaseConfig = {
-      databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+const belConfig = {
+  // minimal hanya databaseURL diperlukan untuk compat DB
+  databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
+};
+const schedConfig = {
+  databaseURL: "https://jadwal-pemeriksaan-usg-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
 
-    /* ==============================
-       🔹 Bagian Bel Notifikasi
-    ============================== */
-    const enableBtn = document.getElementById("enableSoundBtn");
-    const belBtn = document.getElementById("belBtn");
-    const statusText = document.getElementById("status");
-    const belSound = document.getElementById("belSound");
-    const notifImageArea = document.getElementById("notifImageArea");
+// Inisialisasi dua app dengan nama berbeda supaya tidak saling tumpang-tindih
+const belApp = firebase.initializeApp(belConfig, "belApp");
+const belDB = firebase.database(belApp);
 
-    let audioReady = false;
-    let lastTimestamp = 0;
+const schedApp = firebase.initializeApp(schedConfig, "schedApp");
+const schedDB = firebase.database(schedApp);
 
-    function playBel() {
-      if (!audioReady) return;
-      belSound.currentTime = 0;
-      belSound.play()
-        .then(() => {
-          notifImageArea.classList.add("show");
-          belSound.onended = () => notifImageArea.classList.remove("show");
-        })
-        .catch(err => console.warn("Gagal memutar suara:", err));
+/* ============================
+   Data & elemen (schedule)
+   ============================ */
+const preparations = {
+  ct_abdomen: `📌 Persiapan CT Scan Abdomen
+- Puasa makan & minum minimal 6 jam (kecuali air putih).
+- Minum cairan kontras oral jika diminta.
+- Hindari makanan berlemak & berserat tinggi 1 hari sebelum.
+- Informasikan alergi kontras/gagal ginjal/diabetes/hamil.
+- Datang 30 menit lebih awal.`,
+  usg_abdomen: `📌 Persiapan USG Abdomen
+- Puasa 6–8 jam.
+- Tidak merokok, kopi/teh, atau permen saat puasa.
+- Boleh minum sedikit air putih jika haus.`,
+  usg_lower_abdomen: `📌 Persiapan USG Lower Abdomen
+- Kandung kemih harus penuh.
+- Minum 3–4 gelas air ±1 jam sebelum.
+- Jangan buang air kecil hingga selesai.`,
+  ct_cardiac: `📌 Persiapan CT Scan Cardiac
+- Puasa 4–6 jam (air putih boleh).
+- Hindari kafein, cokelat, rokok 12–24 jam.
+- Obat rutin jangan dihentikan tanpa instruksi dokter.
+- Mungkin diberi beta blocker & nitrogliserin.`
+};
+
+const form = document.getElementById("scheduleForm");
+const prep = document.getElementById("prep");
+const procedure = document.getElementById("procedure");
+const messageBox = document.getElementById("message");
+const scheduleList = document.getElementById("scheduleList");
+const viewDate = document.getElementById("viewDate");
+const saveSendBtn = document.getElementById("saveSendBtn");
+const filterProcedure = document.getElementById("filterProcedure");
+const nameInput = document.getElementById("name");
+const waInput = document.getElementById("wa");
+const dateInput = document.getElementById("date");
+const timeInput = document.getElementById("time");
+
+// set default today
+const today = new Date().toISOString().split("T")[0];
+dateInput.value = today;
+viewDate.value = today;
+prep.value = preparations[procedure.value];
+
+// update prep saat ganti procedure
+procedure.addEventListener("change", () => {
+  prep.value = preparations[procedure.value] || "";
+});
+
+/* ---------- Save schedule ---------- */
+async function saveSchedule(sendWA = false) {
+  const name = nameInput.value.trim();
+  const wa = waInput.value.trim();
+  const date = dateInput.value;
+  const time = timeInput.value;
+  const proc = procedure.value;
+
+  if (!name || !wa || !date || !time) {
+    messageBox.textContent = "❌ Lengkapi semua field.";
+    return;
+  }
+
+  // normalize WA to 62...
+  let waNorm = wa.replace(/[^0-9]/g, "");
+  if (waNorm.startsWith("0")) waNorm = "62" + waNorm.slice(1);
+
+  // conflict check
+  const snap = await schedDB.ref(`schedules/${date}`).get();
+  if (snap.exists()) {
+    const day = snap.val();
+    const conflict = Object.values(day).some(s => s.time === time);
+    if (conflict) {
+      messageBox.textContent = `⚠️ Slot jam ${time} sudah terisi, pilih jam lain.`;
+      return;
+    }
+  }
+
+  // push with id
+  const newRef = schedDB.ref(`schedules/${date}`).push();
+  const payload = { id: newRef.key, name, wa, waNorm, procedure: proc, time };
+  await newRef.set(payload);
+
+  messageBox.textContent = "✅ Jadwal berhasil disimpan!";
+  // reset form but keep date selected
+  form.reset();
+  dateInput.value = date;
+  procedure.value = "ct_abdomen";
+  prep.value = preparations["ct_abdomen"];
+
+  if (sendWA) {
+    const text = `Salam Sehat,\nHaloo ${name} untuk pemeriksaan ${proc.replaceAll("_"," ").toUpperCase()} di Instalasi Radiologi RS Mitra Plumbon akan dilaksanakan pada ${date} pukul ${time}.\n\nDengan Persiapan Sebagai Berikut :\n\n${preparations[proc]}\n\nMohon hadir tepat waktu.\nTerima Kasih 🙏`;
+    const waLink = `https://wa.me/${waNorm}?text=${encodeURIComponent(text)}`;
+    window.open(waLink, "_blank");
+  }
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  saveSchedule(false);
+});
+saveSendBtn.addEventListener("click", () => saveSchedule(true));
+
+/* ---------- Load schedule per date + filter ---------- */
+let currentRef = null;
+function detachCurrentListener() {
+  if (currentRef) {
+    try { currentRef.off(); } catch(e){ /* ignore */ }
+    currentRef = null;
+  }
+}
+
+function renderScheduleList(date) {
+  detachCurrentListener();
+  currentRef = schedDB.ref(`schedules/${date}`);
+  currentRef.on("value", snap => {
+    scheduleList.innerHTML = "";
+    if (!snap.exists()) {
+      scheduleList.innerHTML = `<div class="muted" style="padding:18px;">Belum ada jadwal.</div>`;
+      return;
+    }
+    const data = snap.val();
+    let arr = Object.values(data).sort((a,b) => a.time.localeCompare(b.time));
+
+    const selectedFilter = filterProcedure.value;
+    if (selectedFilter !== "all") {
+      arr = arr.filter(s => s.procedure === selectedFilter);
     }
 
-    function vibrateDevice() {
-      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    if (arr.length === 0) {
+      scheduleList.innerHTML = `<div class="muted" style="padding:18px;">Tidak ada jadwal untuk filter ini.</div>`;
+      return;
     }
 
-    enableBtn.addEventListener("click", () => {
-      belSound.play().then(() => {
-        belSound.pause();
-        belSound.currentTime = 0;
-        audioReady = true;
-        enableBtn.disabled = true;
-        belBtn.disabled = false;
-        statusText.textContent = "✅ Suara aktif. Siap menerima notifikasi.";
-      }).catch(err => console.warn("Tidak bisa aktifkan suara:", err));
-    });
+    arr.forEach(s => {
+      const item = document.createElement("div");
+      item.className = "card-item";
 
-    belBtn.addEventListener("click", () => {
-      const ts = Date.now();
-      db.ref("bel_logs").push({ timestamp: ts });
-      statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
-      playBel();
-      vibrateDevice();
-    });
+      // title & info
+      const title = document.createElement("div");
+      title.textContent = s.name;
+      title.style.fontWeight = "600";
 
-    db.ref("bel_logs").limitToLast(1).on("child_added", snapshot => {
-      const data = snapshot.val();
-      if (data && data.timestamp && data.timestamp !== lastTimestamp) {
-        lastTimestamp = data.timestamp;
-        playBel();
-        vibrateDevice();
-        statusText.textContent = "📢 Ada pasien baru!";
-      }
-    });
+      const proc = document.createElement("div");
+      proc.textContent = (s.procedure || "").replaceAll("_"," ").toUpperCase();
+      proc.className = "muted";
 
-    /* ==============================
-       🔹 Bagian Pengingat Otomatis
-    ============================== */
-    const popup = document.getElementById('popup');
-    const doneButton = document.getElementById('doneButton');
-    const plingSound = document.getElementById('plingSound');
+      const timeEl = document.createElement("div");
+      timeEl.className = "time";
+      timeEl.textContent = s.time;
 
-    const reminderTimes = [
-      { hour: 10, minute: 25 },
-      { hour: 13, minute: 25 },
-      { hour: 17, minute: 55 }
-    ];
+      // WA link (build safely)
+      const waAnchor = document.createElement("a");
+      waAnchor.className = "muted";
+      waAnchor.style.display = "inline-block";
+      waAnchor.style.marginTop = "8px";
+      waAnchor.style.textDecoration = "underline";
+      waAnchor.target = "_blank";
+      const waText = `Salam Sehat,\nHaloo ${s.name} untuk pemeriksaan ${(s.procedure||"").replaceAll("_"," ").toUpperCase()} di Instalasi Radiologi RS Mitra Plumbon akan dilaksanakan pada ${date} pukul ${s.time}.\n\nDengan Persiapan Sebagai Berikut :\n\n${preparations[s.procedure]}\n\nMohon hadir tepat waktu.\nTerima Kasih 🙏`;
+      waAnchor.href = `https://wa.me/${s.waNorm}?text=${encodeURIComponent(waText)}`;
+      waAnchor.textContent = "Kirim WA";
 
-    const showDuration = 10 * 60 * 1000; // 10 menit
+      // delete button
+      const delBtn = document.createElement("button");
+      delBtn.className = "delete-btn";
+      delBtn.title = "Hapus Jadwal";
+      delBtn.innerHTML = "🗑️";
 
-    if ("Notification" in window) {
-      if (Notification.permission !== "granted") Notification.requestPermission();
-    }
-
-    function showPopup() {
-      popup.style.display = 'block';
-      plingSound.currentTime = 0;
-      plingSound.play();
-      setTimeout(() => plingSound.pause(), 3000);
-
-      if (Notification.permission === "granted") {
-        const n = new Notification("Pengingat Kepala Shift", {
-          body: "Jangan lupa WA Dokter Spesialis sekarang.",
-          icon: "https://cdn-icons-png.flaticon.com/512/1827/1827349.png"
-        });
-        n.onclick = () => { window.focus(); n.close(); };
-      }
-
-      setTimeout(() => popup.style.display = 'none', showDuration);
-    }
-
-    function checkTime() {
-      const now = new Date();
-      const hour = now.getHours();
-      const minute = now.getMinutes();
-
-      reminderTimes.forEach(t => {
-        if (hour === t.hour && minute === t.minute) {
-          showPopup();
+      delBtn.addEventListener("click", async () => {
+        if (confirm(`Hapus jadwal ${s.name} (${s.time}) ?`)) {
+          try {
+            await schedDB.ref(`schedules/${date}/${s.id}`).remove();
+          } catch (err) {
+            alert("Gagal menghapus: " + err.message);
+          }
         }
       });
-    }
 
-    doneButton.addEventListener('click', () => popup.style.display = 'none');
-    setInterval(checkTime, 30000);
-  </script>
+      item.appendChild(delBtn);
+      item.appendChild(title);
+      item.appendChild(proc);
+      item.appendChild(timeEl);
+      item.appendChild(waAnchor);
+
+      scheduleList.appendChild(item);
+    });
+  });
+}
+
+renderScheduleList(today);
+viewDate.addEventListener("change", () => renderScheduleList(viewDate.value));
+filterProcedure.addEventListener("change", () => renderScheduleList(viewDate.value));
+
+/* ============================
+   Dashboard: Bel notif & Pengingat
+   Menggunakan belDB (belApp)
+   ============================ */
+const enableBtn = document.getElementById("enableSoundBtn");
+const belBtn = document.getElementById("belBtn");
+const statusText = document.getElementById("status");
+const belSound = document.getElementById("belSound");
+const notifImageArea = document.getElementById("notifImageArea");
+const notifImg = document.getElementById("notifImg");
+
+let audioReady = false;
+let lastTimestamp = 0;
+
+function playBel() {
+  if (!audioReady) return;
+  try {
+    belSound.currentTime = 0;
+    belSound.play().then(() => {
+      notifImageArea.classList.add("show");
+      belSound.onended = () => notifImageArea.classList.remove("show");
+    }).catch(e => console.warn("playBel failed:", e));
+  } catch(e) { console.warn(e); }
+}
+
+function vibrateDevice() {
+  if (navigator.vibrate) navigator.vibrate([250,100,250]);
+}
+
+enableBtn.addEventListener("click", () => {
+  // attempt to play & pause to unlock autoplay in browsers
+  belSound.play().then(() => {
+    belSound.pause();
+    belSound.currentTime = 0;
+    audioReady = true;
+    enableBtn.disabled = true;
+    belBtn.disabled = false;
+    statusText.textContent = "✅ Suara aktif. Siap menerima notifikasi.";
+  }).catch(err => {
+    console.warn("Tidak bisa aktifkan suara:", err);
+    statusText.textContent = "⚠️ Browser memblokir autoplay. Coba klik lagi atau izinkan suara.";
+  });
+});
+
+belBtn.addEventListener("click", () => {
+  const ts = Date.now();
+  belDB.ref("bel_logs").push({ timestamp: ts });
+  statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
+  // main device juga memutar bel
+  playBel();
+  vibrateDevice();
+});
+
+// listen last log
+let belRef = belDB.ref("bel_logs").limitToLast(1);
+belRef.on("child_added", snapshot => {
+  const data = snapshot.val();
+  if (data && data.timestamp && data.timestamp !== lastTimestamp) {
+    lastTimestamp = data.timestamp;
+    // play and show image
+    playBel();
+    vibrateDevice();
+    statusText.textContent = "📢 Ada pasien baru!";
+  }
+});
+
+/* ============================
+   Pengingat otomatis (popup)
+   ============================ */
+const popup = document.getElementById('popup');
+const doneButton = document.getElementById('doneButton');
+const plingSound = document.getElementById('plingSound');
+
+const reminderTimes = [
+  { hour: 10, minute: 25 },
+  { hour: 13, minute: 25 },
+  { hour: 17, minute: 55 }
+];
+const showDuration = 10 * 60 * 1000; // 10 menit
+
+if ("Notification" in window) {
+  if (Notification.permission !== "granted") Notification.requestPermission().catch(()=>{});
+}
+
+function showPopup() {
+  popup.style.display = 'block';
+  plingSound.currentTime = 0;
+  plingSound.play().catch(()=>{});
+  setTimeout(() => {
+    try { plingSound.pause(); } catch(e){}
+  }, 3000);
+
+  if (Notification.permission === "granted") {
+    const n = new Notification("Pengingat Kepala Shift", {
+      body: "Jangan lupa WA Dokter Spesialis sekarang.",
+      icon: "https://cdn-icons-png.flaticon.com/512/1827/1827349.png"
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  }
+
+  setTimeout(() => popup.style.display = 'none', showDuration);
+}
+
+function checkTime() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  reminderTimes.forEach(t => {
+    if (hour === t.hour && minute === t.minute) {
+      showPopup();
+    }
+  });
+}
+
+// run check every 20 seconds
+setInterval(checkTime, 20000);
+doneButton.addEventListener('click', () => popup.style.display = 'none');
+
+/* ============================
+   Clean up on unload (optional)
+   ============================ */
+window.addEventListener("beforeunload", () => {
+  // detach firebase listeners
+  try { detachCurrentListener(); } catch(e){}
+  try { belRef.off(); } catch(e){}
+});
+</script>
 </body>
 </html>
