@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bel Notifikasi Pasien</title>
+  <title>Dashboard Kepala Shift Radiologi</title>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -24,76 +24,65 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
-      overflow: hidden;
+      flex-direction: column;
     }
 
-    .container {
-      position: relative;
-      background-color: white;
-      padding: 40px;
+    .section {
+      background: white;
+      padding: 24px;
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
       text-align: center;
-      max-width: 400px;
-      width: 100%;
+      margin: 10px;
+      width: 90%;
+      max-width: 420px;
     }
 
     h1 {
-      margin-bottom: 10px;
-      color: #2c3e50;
-      font-size: 24px;
-    }
-
-    .icon {
-      font-size: 48px;
-      margin-bottom: 20px;
       color: #007bff;
-      transition: transform 0.3s ease;
-    }
-
-    .icon.animate {
-      animation: ring 0.6s ease;
-    }
-
-    @keyframes ring {
-      0% { transform: rotate(0); }
-      20% { transform: rotate(15deg); }
-      40% { transform: rotate(-10deg); }
-      60% { transform: rotate(5deg); }
-      80% { transform: rotate(-3deg); }
-      100% { transform: rotate(0); }
+      margin-bottom: 16px;
     }
 
     button {
-      padding: 16px 32px;
-      font-size: 18px;
+      padding: 12px 20px;
       border: none;
-      border-radius: 10px;
+      border-radius: 8px;
       cursor: pointer;
-      background-color: #007bff;
+      background: #007bff;
       color: white;
-      transition: background 0.3s, transform 0.2s;
-      margin: 10px 0;
+      font-size: 16px;
+      margin: 6px 0;
       width: 100%;
     }
 
-    button:hover {
-      background-color: #0056b3;
-      transform: translateY(-2px);
+    button:hover { background: #0056b3; }
+    button:disabled { background: #a0c4ff; cursor: not-allowed; }
+
+    p { color: #555; }
+
+    /* Popup pengingat */
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 2px solid #007bff;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.2);
+      padding: 24px;
+      text-align: center;
+      z-index: 9999;
+      display: none;
+      animation: fadeIn 0.5s ease-in-out;
     }
 
-    button:disabled {
-      background-color: #a0c4ff;
-      cursor: not-allowed;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -45%); }
+      to { opacity: 1; transform: translate(-50%, -50%); }
     }
 
-    p#status {
-      margin-top: 20px;
-      font-size: 16px;
-      color: #555;
-    }
-
-    /* Area gambar notifikasi */
+    /* Gambar Notifikasi */
     #notifImageArea {
       position: fixed;
       top: 0;
@@ -123,35 +112,57 @@
     }
   </style>
 </head>
+
 <body>
-  <div class="container">
-    <div class="icon" id="icon">🔔</div>
+  <!-- 🔹 Bagian Pengingat Otomatis -->
+  <div class="section">
+    <h1>Pengingat Kepala Shift</h1>
+    <p>Pop-up otomatis jam 10:25, 13:25, dan 17:55 WIB</p>
+  </div>
+
+  <!-- 🔹 Bagian Bel Notifikasi Pasien -->
+  <div class="section">
     <h1>Notifikasi Pasien Baru</h1>
     <button id="enableSoundBtn">🔈 Aktifkan Suara</button>
     <button id="belBtn" disabled>🔔 Kirim Notifikasi</button>
     <p id="status">Klik "Aktifkan Suara" untuk mengaktifkan notifikasi suara.</p>
   </div>
 
-  <!-- Gambar notifikasi -->
+  <!-- 🔔 Popup pengingat -->
+  <div id="popup" class="popup">
+    <h2>🔔 Pengingat Kepala Shift 🔔</h2>
+    <p>Jangan lupa WA Dokter Spesialis sekarang.</p>
+    <button id="doneButton">Sudah dikirim ✅</button>
+  </div>
+
+  <!-- 🔊 Suara -->
+  <audio id="plingSound" preload="auto">
+    <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+  </audio>
+  <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
+
+  <!-- 🖼️ Gambar notifikasi pasien -->
   <div id="notifImageArea">
     <img src="ada_pasien_baru.png" alt="Ada Pasien Baru">
   </div>
 
-  <!-- Suara notifikasi -->
-  <audio id="belSound" src="Notifikasi-pasien-baru.mp3" preload="auto"></audio>
-
   <script>
+    /* ==============================
+       🔧 Firebase Config
+    ============================== */
     const firebaseConfig = {
       databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    /* ==============================
+       🔹 Bagian Bel Notifikasi
+    ============================== */
     const enableBtn = document.getElementById("enableSoundBtn");
     const belBtn = document.getElementById("belBtn");
     const statusText = document.getElementById("status");
     const belSound = document.getElementById("belSound");
-    const icon = document.getElementById("icon");
     const notifImageArea = document.getElementById("notifImageArea");
 
     let audioReady = false;
@@ -162,23 +173,14 @@
       belSound.currentTime = 0;
       belSound.play()
         .then(() => {
-          icon.classList.add("animate");
           notifImageArea.classList.add("show");
-
-          // Hilangkan gambar setelah suara selesai
-          belSound.onended = () => {
-            notifImageArea.classList.remove("show");
-          };
-
-          setTimeout(() => icon.classList.remove("animate"), 700);
+          belSound.onended = () => notifImageArea.classList.remove("show");
         })
         .catch(err => console.warn("Gagal memutar suara:", err));
     }
 
     function vibrateDevice() {
-      if (navigator.vibrate) {
-        navigator.vibrate([300, 100, 300]);
-      }
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
     }
 
     enableBtn.addEventListener("click", () => {
@@ -189,9 +191,7 @@
         enableBtn.disabled = true;
         belBtn.disabled = false;
         statusText.textContent = "✅ Suara aktif. Siap menerima notifikasi.";
-      }).catch(err => {
-        console.warn("Tidak bisa aktifkan suara:", err);
-      });
+      }).catch(err => console.warn("Tidak bisa aktifkan suara:", err));
     });
 
     belBtn.addEventListener("click", () => {
@@ -211,6 +211,57 @@
         statusText.textContent = "📢 Ada pasien baru!";
       }
     });
+
+    /* ==============================
+       🔹 Bagian Pengingat Otomatis
+    ============================== */
+    const popup = document.getElementById('popup');
+    const doneButton = document.getElementById('doneButton');
+    const plingSound = document.getElementById('plingSound');
+
+    const reminderTimes = [
+      { hour: 10, minute: 25 },
+      { hour: 13, minute: 25 },
+      { hour: 17, minute: 55 }
+    ];
+
+    const showDuration = 10 * 60 * 1000; // 10 menit
+
+    if ("Notification" in window) {
+      if (Notification.permission !== "granted") Notification.requestPermission();
+    }
+
+    function showPopup() {
+      popup.style.display = 'block';
+      plingSound.currentTime = 0;
+      plingSound.play();
+      setTimeout(() => plingSound.pause(), 3000);
+
+      if (Notification.permission === "granted") {
+        const n = new Notification("Pengingat Kepala Shift", {
+          body: "Jangan lupa WA Dokter Spesialis sekarang.",
+          icon: "https://cdn-icons-png.flaticon.com/512/1827/1827349.png"
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
+
+      setTimeout(() => popup.style.display = 'none', showDuration);
+    }
+
+    function checkTime() {
+      const now = new Date();
+      const hour = now.getHours();
+      const minute = now.getMinutes();
+
+      reminderTimes.forEach(t => {
+        if (hour === t.hour && minute === t.minute) {
+          showPopup();
+        }
+      });
+    }
+
+    doneButton.addEventListener('click', () => popup.style.display = 'none');
+    setInterval(checkTime, 30000);
   </script>
 </body>
 </html>
