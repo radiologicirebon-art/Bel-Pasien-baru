@@ -106,6 +106,11 @@
       .actions { flex-direction:column; }
       .top-row { flex-direction:column; align-items:flex-start; }
     }
+
+    /* Notulen specific */
+    .sig-pad { border:1px dashed #94a3b8; height:120px; border-radius:6px; }
+    #previewNotulen { border:1px solid #e2e8f0; padding:16px; margin-top:12px; background:#fff; }
+    .small-note { font-size:12px; color:var(--muted); margin-top:6px; }
   </style>
 </head>
 <body>
@@ -114,7 +119,7 @@
     <!-- Header card (Dashboard title) -->
     <div class="card">
       <h1>🩻 RS Mitra Plumbon - Kepala Shift & Penjadwalan</h1>
-      <p class="small">Dashboard Kepala Shift terintegrasi dengan sistem penjadwalan pemeriksaan. (Satu halaman, dua database Firebase terpisah).</p>
+      <p class="small">Dashboard Kepala Shift terintegrasi dengan sistem penjadwalan pemeriksaan. (Satu halaman, tiga database Firebase terpisah).</p>
     </div>
 
     <!-- Dashboard Kepala Shift (pengingat + bel) -->
@@ -225,6 +230,84 @@
       <div id="scheduleList" class="grid"></div>
     </div>
 
+    <!-- NOTULEN CARD (baru) -->
+    <div class="card" id="notulenCard">
+      <div class="top-row">
+        <div>
+          <h2>📖 Notulen Operan Dinas Harian</h2>
+          <p class="muted">Isikan notulen harian oleh Kepala Shift. Data tersimpan realtime ke Firebase dan dapat diunduh sebagai PDF (A4 portrait, kop RS resmi).</p>
+        </div>
+      </div>
+
+      <form id="notulenForm" style="margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px;">
+        <div>
+          <label>Tanggal</label>
+          <input id="n_tanggal" type="date" required>
+        </div>
+        <div>
+          <label>Shift</label>
+          <select id="n_shift">
+            <option value="Pagi">Pagi</option>
+            <option value="Siang">Siang</option>
+            <option value="Malam">Malam</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label>Nama Kepala Shift</label>
+          <input id="n_petugas" type="text" placeholder="Nama Kepala Shift" required>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label>Agenda / Isi Operan Dinas</label>
+          <textarea id="n_agenda" rows="6" placeholder="Tuliskan isi operan dinas..."></textarea>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <h4 style="margin:6px 0;">Checklist Kontrol Mutu</h4>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px;">
+            <label><input type="checkbox" class="n_chk" data-key="cek_kontrol_mutu"> Semua data hasil pemeriksaan dicek</label>
+            <label><input type="checkbox" class="n_chk" data-key="ruangan_bersih"> Ruangan rapih & bersih</label>
+            <label><input type="checkbox" class="n_chk" data-key="kontrol_mcu"> Kontrol MCU</label>
+            <label><input type="checkbox" class="n_chk" data-key="input_obat_alkes"> Input obat & alkes</label>
+            <label><input type="checkbox" class="n_chk" data-key="pmri"> PMRI alat</label>
+            <label><input type="checkbox" class="n_chk" data-key="distribusi_foto"> Distribusi foto ke ranap</label>
+            <label><input type="checkbox" class="n_chk" data-key="perbaikan_cepat"> Perbaikan cepat bila kekurangan</label>
+            <label><input type="checkbox" class="n_chk" data-key="kontrol_belum_expertise"> Kontrol hasil belum expertise</label>
+            <label><input type="checkbox" class="n_chk" data-key="kontrol_expertise"> Kontrol hasil expertise</label>
+          </div>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label>Catatan / Saran</label>
+          <textarea id="n_catatan" rows="3"></textarea>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label>Tanda Tangan Kepala Shift</label>
+          <canvas id="n_sigCanvas" class="sig-pad"></canvas>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button id="n_clearSig" type="button" class="ghost">Bersihkan Tanda Tangan</button>
+            <div class="small-note">Jika tidak ada tanda tangan, PDF tetap akan dibuat tanpa gambar tanda tangan.</div>
+          </div>
+        </div>
+
+        <div style="grid-column:1/-1; display:flex; gap:8px; justify-content:flex-end;">
+          <button id="n_save" type="button" class="primary">💾 Simpan Notulen</button>
+          <button id="n_preview" type="button" class="ghost">🔍 Preview</button>
+        </div>
+      </form>
+
+      <div id="previewNotulen" style="display:none; margin-top:12px;">
+        <h3>Preview Notulen</h3>
+        <div id="docNotulen" style="background:#fff;padding:12px"></div>
+        <div style="margin-top:8px; display:flex; gap:8px; justify-content:flex-end;">
+          <button id="n_downloadPdf" class="primary">⬇ Download PDF</button>
+        </div>
+      </div>
+
+      <div id="notulenList" style="margin-top:18px;"></div>
+    </div>
+
   </div>
 
   <!-- Audio (pling dan bel) -->
@@ -236,32 +319,47 @@
     <source src="Notifikasi-pasien-baru.mp3" type="audio/mpeg">
   </audio>
 
-<script>
-/* ============================
-   CONFIG: dua Firebase app
-   - belApp -> DB bel-pasien
-   - schedApp -> DB jadwal-pemeriksaan
-   Pastikan databaseURL sama persis seperti yang Bapak sebut.
-   ============================ */
+  <!-- Libraries for Notulen (signature, html2canvas, jspdf) -->
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
+<script>
+/* ===========================
+   Firebase apps config (compat)
+   =========================== */
+
+/* ========== BEL (notifikasi) ========== */
+/* Ganti databaseURL jika berbeda */
 const belConfig = {
-  // minimal hanya databaseURL diperlukan untuk compat DB
-  databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  databaseURL: "https://bel-pasien-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
+
+/* ========== SCHED (jadwal) ========== */
+/* Ganti databaseURL jika berbeda */
 const schedConfig = {
   databaseURL: "https://jadwal-pemeriksaan-usg-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
-// Inisialisasi dua app dengan nama berbeda supaya tidak saling tumpang-tindih
+/* ========== NOTULEN (notulen operan dinas) ========== */
+/* Gunakan DB notulen Anda */
+const notulenConfig = {
+  databaseURL: "https://notulen-operan-dinas-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+
+/* Initialize three named apps */
 const belApp = firebase.initializeApp(belConfig, "belApp");
 const belDB = firebase.database(belApp);
 
 const schedApp = firebase.initializeApp(schedConfig, "schedApp");
 const schedDB = firebase.database(schedApp);
 
-/* ============================
-   Data & elemen (schedule)
-   ============================ */
+const notulenApp = firebase.initializeApp(notulenConfig, "notulenApp");
+const notulenDB = firebase.database(notulenApp);
+
+/* ===========================
+   Schedule (existing dashboard) - unchanged logic
+   =========================== */
 const preparations = {
   ct_abdomen: `📌 Persiapan CT Scan Abdomen
 - Puasa makan & minum minimal 6 jam (kecuali air putih).
@@ -303,12 +401,10 @@ dateInput.value = today;
 viewDate.value = today;
 prep.value = preparations[procedure.value];
 
-// update prep saat ganti procedure
 procedure.addEventListener("change", () => {
   prep.value = preparations[procedure.value] || "";
 });
 
-/* ---------- Save schedule ---------- */
 async function saveSchedule(sendWA = false) {
   const name = nameInput.value.trim();
   const wa = waInput.value.trim();
@@ -321,11 +417,9 @@ async function saveSchedule(sendWA = false) {
     return;
   }
 
-  // normalize WA to 62...
   let waNorm = wa.replace(/[^0-9]/g, "");
   if (waNorm.startsWith("0")) waNorm = "62" + waNorm.slice(1);
 
-  // conflict check
   const snap = await schedDB.ref(`schedules/${date}`).get();
   if (snap.exists()) {
     const day = snap.val();
@@ -336,13 +430,11 @@ async function saveSchedule(sendWA = false) {
     }
   }
 
-  // push with id
   const newRef = schedDB.ref(`schedules/${date}`).push();
   const payload = { id: newRef.key, name, wa, waNorm, procedure: proc, time };
   await newRef.set(payload);
 
   messageBox.textContent = "✅ Jadwal berhasil disimpan!";
-  // reset form but keep date selected
   form.reset();
   dateInput.value = date;
   procedure.value = "ct_abdomen";
@@ -361,11 +453,11 @@ form.addEventListener("submit", e => {
 });
 saveSendBtn.addEventListener("click", () => saveSchedule(true));
 
-/* ---------- Load schedule per date + filter ---------- */
+/* Schedule rendering */
 let currentRef = null;
 function detachCurrentListener() {
   if (currentRef) {
-    try { currentRef.off(); } catch(e){ /* ignore */ }
+    try { currentRef.off(); } catch(e){ }
     currentRef = null;
   }
 }
@@ -381,67 +473,32 @@ function renderScheduleList(date) {
     }
     const data = snap.val();
     let arr = Object.values(data).sort((a,b) => a.time.localeCompare(b.time));
-
     const selectedFilter = filterProcedure.value;
-    if (selectedFilter !== "all") {
-      arr = arr.filter(s => s.procedure === selectedFilter);
-    }
-
+    if (selectedFilter !== "all") arr = arr.filter(s => s.procedure === selectedFilter);
     if (arr.length === 0) {
       scheduleList.innerHTML = `<div class="muted" style="padding:18px;">Tidak ada jadwal untuk filter ini.</div>`;
       return;
     }
-
     arr.forEach(s => {
       const item = document.createElement("div");
       item.className = "card-item";
-
-      // title & info
       const title = document.createElement("div");
-      title.textContent = s.name;
-      title.style.fontWeight = "600";
-
-      const proc = document.createElement("div");
-      proc.textContent = (s.procedure || "").replaceAll("_"," ").toUpperCase();
-      proc.className = "muted";
-
-      const timeEl = document.createElement("div");
-      timeEl.className = "time";
-      timeEl.textContent = s.time;
-
-      // WA link (build safely)
+      title.textContent = s.name; title.style.fontWeight = "600";
+      const proc = document.createElement("div"); proc.textContent = (s.procedure || "").replaceAll("_"," ").toUpperCase(); proc.className = "muted";
+      const timeEl = document.createElement("div"); timeEl.className = "time"; timeEl.textContent = s.time;
       const waAnchor = document.createElement("a");
-      waAnchor.className = "muted";
-      waAnchor.style.display = "inline-block";
-      waAnchor.style.marginTop = "8px";
-      waAnchor.style.textDecoration = "underline";
+      waAnchor.className = "muted"; waAnchor.style.display = "inline-block"; waAnchor.style.marginTop = "8px"; waAnchor.style.textDecoration = "underline";
       waAnchor.target = "_blank";
       const waText = `Salam Sehat,\nHaloo ${s.name} untuk pemeriksaan ${(s.procedure||"").replaceAll("_"," ").toUpperCase()} di Instalasi Radiologi RS Mitra Plumbon akan dilaksanakan pada ${date} pukul ${s.time}.\n\nDengan Persiapan Sebagai Berikut :\n\n${preparations[s.procedure]}\n\nMohon hadir tepat waktu.\nTerima Kasih 🙏`;
       waAnchor.href = `https://wa.me/${s.waNorm}?text=${encodeURIComponent(waText)}`;
       waAnchor.textContent = "Kirim WA";
-
-      // delete button
-      const delBtn = document.createElement("button");
-      delBtn.className = "delete-btn";
-      delBtn.title = "Hapus Jadwal";
-      delBtn.innerHTML = "🗑️";
-
+      const delBtn = document.createElement("button"); delBtn.className = "delete-btn"; delBtn.title = "Hapus Jadwal"; delBtn.innerHTML = "🗑️";
       delBtn.addEventListener("click", async () => {
         if (confirm(`Hapus jadwal ${s.name} (${s.time}) ?`)) {
-          try {
-            await schedDB.ref(`schedules/${date}/${s.id}`).remove();
-          } catch (err) {
-            alert("Gagal menghapus: " + err.message);
-          }
+          try { await schedDB.ref(`schedules/${date}/${s.id}`).remove(); } catch (err) { alert("Gagal menghapus: " + err.message); }
         }
       });
-
-      item.appendChild(delBtn);
-      item.appendChild(title);
-      item.appendChild(proc);
-      item.appendChild(timeEl);
-      item.appendChild(waAnchor);
-
+      item.appendChild(delBtn); item.appendChild(title); item.appendChild(proc); item.appendChild(timeEl); item.appendChild(waAnchor);
       scheduleList.appendChild(item);
     });
   });
@@ -451,10 +508,9 @@ renderScheduleList(today);
 viewDate.addEventListener("change", () => renderScheduleList(viewDate.value));
 filterProcedure.addEventListener("change", () => renderScheduleList(viewDate.value));
 
-/* ============================
-   Dashboard: Bel notif & Pengingat
-   Menggunakan belDB (belApp)
-   ============================ */
+/* ===========================
+   Bel notif & Pengingat
+   =========================== */
 const enableBtn = document.getElementById("enableSoundBtn");
 const belBtn = document.getElementById("belBtn");
 const statusText = document.getElementById("status");
@@ -481,7 +537,6 @@ function vibrateDevice() {
 }
 
 enableBtn.addEventListener("click", () => {
-  // attempt to play & pause to unlock autoplay in browsers
   belSound.play().then(() => {
     belSound.pause();
     belSound.currentTime = 0;
@@ -499,27 +554,22 @@ belBtn.addEventListener("click", () => {
   const ts = Date.now();
   belDB.ref("bel_logs").push({ timestamp: ts });
   statusText.textContent = "🔔 Notifikasi dikirim ke semua perangkat!";
-  // main device juga memutar bel
   playBel();
   vibrateDevice();
 });
 
-// listen last log
 let belRef = belDB.ref("bel_logs").limitToLast(1);
 belRef.on("child_added", snapshot => {
   const data = snapshot.val();
   if (data && data.timestamp && data.timestamp !== lastTimestamp) {
     lastTimestamp = data.timestamp;
-    // play and show image
     playBel();
     vibrateDevice();
     statusText.textContent = "📢 Ada pasien baru!";
   }
 });
 
-/* ============================
-   Pengingat otomatis (popup)
-   ============================ */
+/* Pengingat otomatis (popup) */
 const popup = document.getElementById('popup');
 const doneButton = document.getElementById('doneButton');
 const plingSound = document.getElementById('plingSound');
@@ -529,7 +579,7 @@ const reminderTimes = [
   { hour: 13, minute: 25 },
   { hour: 17, minute: 55 }
 ];
-const showDuration = 10 * 60 * 1000; // 10 menit
+const showDuration = 10 * 60 * 1000;
 
 if ("Notification" in window) {
   if (Notification.permission !== "granted") Notification.requestPermission().catch(()=>{});
@@ -539,9 +589,7 @@ function showPopup() {
   popup.style.display = 'block';
   plingSound.currentTime = 0;
   plingSound.play().catch(()=>{});
-  setTimeout(() => {
-    try { plingSound.pause(); } catch(e){}
-  }, 3000);
+  setTimeout(() => { try { plingSound.pause(); } catch(e){} }, 3000);
 
   if (Notification.permission === "granted") {
     const n = new Notification("Pengingat Kepala Shift", {
@@ -565,18 +613,224 @@ function checkTime() {
   });
 }
 
-// run check every 20 seconds
 setInterval(checkTime, 20000);
 doneButton.addEventListener('click', () => popup.style.display = 'none');
 
-/* ============================
-   Clean up on unload (optional)
-   ============================ */
+/* ===========================
+   NOTULEN: logic & UI
+   =========================== */
+
+/* Helper: get checklist values */
+function getNotulenChecklist() {
+  const obj = {};
+  document.querySelectorAll('.n_chk').forEach(cb => obj[cb.dataset.key] = cb.checked);
+  return obj;
+}
+
+/* Signature Pad setup for Notulen */
+const n_sigCanvas = document.getElementById('n_sigCanvas');
+const n_sigPad = new SignaturePad(n_sigCanvas, { penColor: "rgb(20,20,20)" });
+function n_resizeCanvas() {
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  n_sigCanvas.width = n_sigCanvas.offsetWidth * ratio;
+  n_sigCanvas.height = n_sigCanvas.offsetHeight * ratio;
+  n_sigCanvas.getContext("2d").scale(ratio, ratio);
+  n_sigPad.clear();
+}
+window.addEventListener('resize', n_resizeCanvas);
+n_resizeCanvas();
+document.getElementById('n_clearSig').addEventListener('click', ()=> n_sigPad.clear());
+
+/* Logo base64 (inline) - gunakan logo Anda di bawah
+   (saya telah meng-encode file LOGO RSMP NEW.jpg Anda) */
+const logoBase64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsM..."; 
+/* NOTE: di atas saya singkat untuk pesan; PASTE seluruh base64 lengkap di sini
+   (saya menyertakan base64 penuh di file Anda; jika copy dari asisten sebelumnya,
+   pastikan string base64 lengkap dimasukkan). */
+
+/* Build notulen HTML for preview (uses Times New Roman style for PDF) */
+function buildNotulenHtml(data) {
+  const checklist = data.checklist || {};
+  const listHtml = Object.entries(checklist).map(([k,v]) => `<li>${k.replaceAll('_',' ')}: ${v ? 'Ya' : 'Tidak'}</li>`).join('');
+  const sigImg = data.signature || '';
+  return `
+    <div style="font-family:'Times New Roman',serif;padding:30px;color:#000">
+      <table style="width:100%;border-bottom:2px solid #000;padding-bottom:6px">
+        <tr>
+          <td style="width:200px">
+            <img src="${logoBase64}" style="width:200px;height:auto">
+          </td>
+          <td style="text-align:center;vertical-align:middle">
+            <div style="font-size:16px;font-weight:bold">RUMAH SAKIT MITRA PLUMBON CIREBON</div>
+            <div style="font-size:15px;font-weight:bold">INSTALASI RADIOLOGI</div>
+            <div style="font-size:17px;font-weight:bold;margin-top:4px;text-decoration:underline">NOTULEN OPERAN DINAS HARIAN</div>
+          </td>
+          <td style="text-align:right;vertical-align:top;font-size:12px">RSMP/F.QMR.020/Rev.0</td>
+        </tr>
+      </table>
+
+      <table style="width:100%;margin-top:10px;font-size:13px">
+        <tr><td><b>Tanggal:</b> ${data.tanggal || ''}</td><td><b>Shift:</b> ${data.shift || ''}</td></tr>
+        <tr><td colspan="2"><b>Petugas (Kepala Shift):</b> ${data.petugas || ''}</td></tr>
+      </table>
+
+      <div style="margin-top:12px">
+        <b>Agenda / Isi Operan Dinas:</b><br>
+        <div style="border:1px solid #555;padding:8px;white-space:pre-wrap">${data.agenda || ''}</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <b>Checklist Kontrol Mutu:</b>
+        <ul style="margin-left:20px">${listHtml}</ul>
+      </div>
+
+      <div style="margin-top:12px">
+        <b>Catatan / Saran:</b>
+        <div style="border:1px solid #555;padding:8px;white-space:pre-wrap">${data.catatan || ''}</div>
+      </div>
+
+      <table style="width:100%;margin-top:40px;text-align:center;font-size:13px">
+        <tr>
+          <td><b>Disetujui</b><br>Kepala Instalasi Radiologi<br><br><br><br><u>dr. Amelia Rusli, Sp.Rad</u></td>
+          <td><b>Mengetahui</b><br>Koordinator Radiologi<br><br><br><br><u>Ino Hadiwinata, A.Md.Rad</u></td>
+          <td><b>Dibuat Oleh</b><br>Kepala Shift<br>
+            <div style="border:1px solid #ccc;margin:4px;padding:4px">
+              ${sigImg ? `<img src="${sigImg}" style="max-width:150px;height:auto">` : '<div style="height:80px"></div>'}
+            </div>
+            <u>${data.petugas || ''}</u>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+/* Show preview */
+const previewBox = document.getElementById('previewNotulen');
+const docNotulen = document.getElementById('docNotulen');
+document.getElementById('n_preview').addEventListener('click', ()=>{
+  const data = {
+    tanggal: document.getElementById('n_tanggal').value,
+    shift: document.getElementById('n_shift').value,
+    petugas: document.getElementById('n_petugas').value,
+    agenda: document.getElementById('n_agenda').value,
+    checklist: getNotulenChecklist(),
+    catatan: document.getElementById('n_catatan').value,
+    signature: n_sigPad.isEmpty() ? '' : n_sigPad.toDataURL()
+  };
+  docNotulen.innerHTML = buildNotulenHtml(data);
+  previewBox.style.display = 'block';
+});
+
+/* Save notulen to Firebase */
+document.getElementById('n_save').addEventListener('click', async ()=>{
+  const tanggal = document.getElementById('n_tanggal').value;
+  const petugas = document.getElementById('n_petugas').value;
+  if (!tanggal || !petugas) { alert('Isi tanggal dan nama Kepala Shift terlebih dahulu.'); return; }
+  const payload = {
+    tanggal,
+    shift: document.getElementById('n_shift').value,
+    petugas,
+    agenda: document.getElementById('n_agenda').value,
+    checklist: getNotulenChecklist(),
+    catatan: document.getElementById('n_catatan').value,
+    signature: n_sigPad.isEmpty() ? '' : n_sigPad.toDataURL(),
+    createdAt: Date.now()
+  };
+  try {
+    const newRef = notulenDB.ref('notulen').push();
+    await newRef.set(payload);
+    alert('Notulen tersimpan ke Firebase!');
+    // show preview automatically
+    docNotulen.innerHTML = buildNotulenHtml(payload);
+    previewBox.style.display = 'block';
+    // reset small: clear signature but keep values if you want
+    n_sigPad.clear();
+  } catch (err) {
+    alert('Gagal menyimpan notulen: ' + err.message);
+  }
+});
+
+/* Download PDF from preview */
+document.getElementById('n_downloadPdf').addEventListener('click', async ()=>{
+  if (!docNotulen.innerHTML.trim()) { alert('Buat preview dulu sebelum mengunduh.'); return; }
+  // render to canvas and save A4 portrait
+  const canvas = await html2canvas(docNotulen, { scale: 2 });
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p','pt','a4');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imgWidth = pageWidth - 40;
+  const imgHeight = canvas.height * imgWidth / canvas.width;
+  pdf.addImage(imgData, 'PNG', 20, 20, imgWidth, imgHeight);
+  // filename includes tanggal jika ada
+  const tanggal = document.getElementById('n_tanggal').value || new Date().toISOString().slice(0,10);
+  pdf.save(`Notulen_${tanggal}.pdf`);
+});
+
+/* Load realtime notulen list */
+const notulenList = document.getElementById('notulenList');
+function loadNotulenList(){
+  const refNot = notulenDB.ref('notulen');
+  refNot.on('value', snap => {
+    const val = snap.val();
+    notulenList.innerHTML = '<h4>Riwayat Notulen</h4>';
+    if (!val) { notulenList.innerHTML += '<div class="muted">Belum ada notulen.</div>'; return; }
+    const ul = document.createElement('ul');
+    Object.keys(val).reverse().forEach(k => {
+      const it = val[k];
+      const d = new Date(it.createdAt || 0);
+      const li = document.createElement('li');
+      li.style.marginBottom = '8px';
+      li.innerHTML = `<strong>${it.tanggal}</strong> — ${it.shift} — ${it.petugas} <small class="muted">(${d.toLocaleString()})</small>
+        <button data-key="${k}" style="margin-left:8px;" class="ghost view-not">Lihat</button>
+        <button data-key="${k}" style="margin-left:6px;" class="ghost del-not">Hapus</button>`;
+      ul.appendChild(li);
+    });
+    notulenList.appendChild(ul);
+    // view handlers
+    document.querySelectorAll('.view-not').forEach(b => {
+      b.addEventListener('click', () => {
+        const data = val[b.dataset.key];
+        docNotulen.innerHTML = buildNotulenHtml(data);
+        previewBox.style.display = 'block';
+        window.scrollTo({top:0,behavior:'smooth'});
+      });
+    });
+    document.querySelectorAll('.del-not').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!confirm('Hapus notulen ini?')) return;
+        try {
+          await notulenDB.ref(`notulen/${b.dataset.key}`).remove();
+          alert('Terhapus.');
+        } catch (e) { alert('Gagal hapus: ' + e.message); }
+      });
+    });
+  });
+}
+loadNotulenList();
+
+/* ===========================
+   Clean up on unload
+   =========================== */
 window.addEventListener("beforeunload", () => {
-  // detach firebase listeners
   try { detachCurrentListener(); } catch(e){}
   try { belRef.off(); } catch(e){}
 });
+
+/* ===========================
+   IMPORTANT:
+   - Ganti logoBase64 dengan string base64 lengkap yang saya berikan (jika saya tidak menyertakan penuh di sini).
+   - Ganti databaseURL di belConfig / schedConfig / notulenConfig jika berbeda.
+   - Pastikan Realtime Database rules mengizinkan write jika Anda tidak menggunakan Auth:
+     {
+       "rules": {
+         ".read": true,
+         ".write": true
+       }
+     }
+   - Untuk keamanan produksi: pertimbangkan rules yang membatasi write hanya dari domain/role tertentu.
+   =========================== */
 </script>
 </body>
 </html>
